@@ -1,0 +1,167 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Escape Tsunami for Brainrots",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "OTAMA HUB",
+   LoadingSubtitle = "by OTAMA",
+   ShowText = "OTAMA", -- for mobile users to unhide Rayfield, change if you'd like
+   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+
+   ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from emitting warnings when the script has a version mismatch with the interface.
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, -- Create a custom folder for your hub/game
+      FileName = "OTAMA HUB"
+   },
+
+   Discord = {
+      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "noinvitelink", -- The Discord invite code, do not include Discord.gg/. E.g. Discord.gg/ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the Discord every time they load it up
+   },
+
+   KeySystem = false, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
+      FileName = "Key", -- It is recommended to use something unique, as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"Hello"} -- List of keys that the system will accept, can be RAW file links (pastebin, github, etc.) or simple strings ("hello", "key22")
+   }
+})
+
+local MainTab = Window:CreateTab("PVP ARENA", nil) -- Title, Image
+local MainSection = Tab:CreateSection("Main")
+   }
+})
+
+local Button = MainTab:CreateButton({
+   Name = "Auto TP",
+   Callback = function()
+        local Players = game:GetService("Players")
+
+-- Settings
+local BASE_POSITION = Vector3.new(100, 10, 100) -- CHANGE THIS to your base coordinates
+local TELEPORT_EFFECT_SOUND = "rbxassetid://12222225" -- Metal pipe or teleport sound
+
+local harpoon = script.Parent
+
+harpoon.Touched:Connect(function(hit)
+	-- 1. Check if we hit a "Brainrot" (an enemy)
+	local character = hit.Parent
+	local humanoid = character:FindFirstChild("Humanoid")
+	
+	if humanoid and character:FindFirstChild("HumanoidRootPart") then
+		-- 2. Identify the player who shot the harpoon
+		-- This assumes you tagged the harpoon with the Creator's name when fired
+		local creatorTag = harpoon:FindFirstChild("creator")
+		if creatorTag and creatorTag.Value then
+			local player = creatorTag.Value
+			local playerChar = player.Character
+			
+			if playerChar and playerChar:FindFirstChild("HumanoidRootPart") then
+				-- 3. THE TELEPORT (The "Instant Aura" Move)
+				print("Target secured. Sending " .. player.Name .. " back to base.")
+				
+				-- Move the player to the base
+				playerChar.HumanoidRootPart.CFrame = CFrame.new(BASE_POSITION)
+				
+			end
+		end
+	end
+end)
+   end,
+})
+
+local Button = MainTab:CreateButton({
+   Name = "Auto Aim",
+   Callback = function()
+        local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CAS = game:GetService("ContextActionService")
+
+-- [[ CONFIGURATION ]] --
+local HARPOON_SPEED = 150
+local RANGE = 200
+local BASE_LOCATION = Vector3.new(0, 10, 0) -- Change this to your Base's Position!
+local TARGET_TAG = "Brainrot" -- Put this tag on your enemies
+
+local player = Players.LocalPlayer
+local tool = script.Parent
+local handle = tool:WaitForChild("Handle")
+local isLocked = false
+
+-- [[ FIND THE SIGMA ]] --
+local function getTarget()
+	local closest = nil
+	local dist = RANGE
+	for _, v in pairs(workspace:GetChildren()) do
+		local hum = v:FindFirstChild("Humanoid")
+		local hrp = v:FindFirstChild("HumanoidRootPart")
+		if hrp and hum and v ~= player.Character and hum.Health > 0 then
+			local d = (hrp.Position - handle.Position).Magnitude
+			if d < dist then
+				dist = d
+				closest = hrp
+			end
+		end
+	end
+	return closest
+end
+
+-- [[ THE AIMBOT LOGIC ]] --
+RunService.RenderStepped:Connect(function()
+	if isLocked then
+		local target = getTarget()
+		if target then
+			-- Calculate Lead (Where they will be)
+			local travelTime = (target.Position - handle.Position).Magnitude / HARPOON_SPEED
+			local predictedPos = target.Position + (target.AssemblyLinearVelocity * travelTime)
+			
+			-- Instant Snap Aim
+			handle.CFrame = CFrame.lookAt(handle.Position, predictedPos)
+		end
+	end
+end)
+
+-- [[ AUTO-TP ON HIT ]] --
+-- This detects when the harpoon in your hand touches a target
+handle.Touched:Connect(function(hit)
+	local enemy = hit.Parent
+	if enemy:FindFirstChild("Humanoid") and enemy ~= player.Character then
+		print("Target Secured! Teleporting to Base...")
+		
+		-- Teleport Player back to Base
+		local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			hrp.CFrame = CFrame.new(BASE_LOCATION)
+		end
+	end
+end)
+
+-- [[ MOBILE BUTTON SETUP ]] --
+local function onButtonPress(actionName, inputState)
+	if inputState == Enum.UserInputState.Begin then
+		isLocked = not isLocked
+		print(isLocked and "Aura Locked" or "Aura Lost")
+	end
+end
+
+tool.Equipped:Connect(function()
+	CAS:BindAction("LockOn", onButtonPress, true, Enum.KeyCode.F)
+	CAS:SetTitle("LockOn", "LOCK 🎯") -- This creates the mobile button
+end)
+
+tool.Unequipped:Connect(function()
+	CAS:UnbindAction("LockOn")
+	isLocked = false
+end)
+   end,
+})
