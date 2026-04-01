@@ -41,68 +41,47 @@ local MainTab = Window:CreateTab("PVP ARENA", nil) -- Title, Image
 local MainSection = MainTab:CreateSection("Main")
 
 local Button = MainTab:CreateButton({
-   Name = "Auto TP",
+   Name = "Auto Harpoon",
    Callback = function()
-        local Players = game:GetService("Players")
-
-local BASE_POSITION = Vector3.new(100, 10, 100) 
-local TELEPORT_EFFECT_SOUND = "rbxassetid://12222225" 
-
-local harpoon = script.Parent
-
-harpoon.Touched:Connect(function(hit)
-	-- 1. Check if we hit a "Brainrot" (an enemy)
-	local character = hit.Parent
-	local humanoid = character:FindFirstChild("Humanoid")
-	
-	if humanoid and character:FindFirstChild("HumanoidRootPart") then
-		-- 2. Identify the player who shot the harpoon
-		-- This assumes you tagged the harpoon with the Creator's name when fired
-		local creatorTag = harpoon:FindFirstChild("creator")
-		if creatorTag and creatorTag.Value then
-			local player = creatorTag.Value
-			local playerChar = player.Character
-			
-			if playerChar and playerChar:FindFirstChild("HumanoidRootPart") then
-				-- 3. THE TELEPORT (The "Instant Aura" Move)
-				print("Target secured. Sending " .. player.Name .. " back to base.")
-				
-				playerChar.HumanoidRootPart.CFrame = CFrame.new(BASE_POSITION)
-				
-			end
-		end
-	end
-end)
-   end,
-})
-
-local Button = MainTab:CreateButton({
-   Name = "Auto Aim",
-   Callback = function()
-        local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+        local RunService = game:GetService("RunService")
 local CAS = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
 
-local HARPOON_SPEED = 150
-local RANGE = 200
-local BASE_LOCATION = Vector3.new(0, 10, 0) 
-local TARGET_TAG = "Brainrot" 
+-- [[ CONFIG ]] --
+local RANGE = 250 -- Large range to grab distant Celestials
+local HARPOON_SPEED = 180 -- Fast travel speed for the gamepass gun
+local LOCK_KEY = Enum.KeyCode.F
 
-local player = Players.LocalPlayer
 local tool = script.Parent
 local handle = tool:WaitForChild("Handle")
 local isLocked = false
 
-local function getTarget()
-	local closest = nil
-	local dist = RANGE
-	for _, v in pairs(workspace:GetChildren()) do
-		local hum = v:FindFirstChild("Humanoid")
-		local hrp = v:FindFirstChild("HumanoidRootPart")
-		if hrp and hum and v ~= player.Character and hum.Health > 0 then
-			local d = (hrp.Position - handle.Position).Magnitude
-			if d < dist then
-				dist = d
+-- [[ BRAINROT FILTER ]] --
+-- In "Escape Tsunami," Brainrots are usually models with a "HumanoidRootPart" 
+-- or a specific name/tag. This script looks for any character model that isn't a player.
+local function isValidBrainrot(obj)
+	if not obj:IsA("Model") then return false end
+	local hrp = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("PrimaryPart")
+	
+	-- Ensure it's not a player and has a part to aim at
+	if hrp and not Players:GetPlayerFromCharacter(obj) then
+		return true
+	end
+	return false
+end
+
+-- [[ FIND THE JUICIEST BRAINROT ]] --
+local function getBestTarget()
+	local closest, shortestDist = nil, RANGE
+	
+	-- We check the workspace for spawnable Brainrots
+	for _, obj in pairs(workspace:GetChildren()) do
+		if isValidBrainrot(obj) then
+			local hrp = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("PrimaryPart")
+			local dist = (hrp.Position - handle.Position).Magnitude
+			
+			if dist < shortestDist then
+				shortestDist = dist
 				closest = hrp
 			end
 		end
@@ -110,45 +89,41 @@ local function getTarget()
 	return closest
 end
 
+-- [[ THE AUTO-AIM LOOP ]] --
 RunService.RenderStepped:Connect(function()
-	if isLocked then
-		local target = getTarget()
+	if isLocked and handle then
+		local target = getBestTarget()
+		
 		if target then
-			-- Calculate Lead (Where they will be)
+			-- The "Escape Tsunami" harpoon has a slight travel time.
+			-- If the Brainrot is moving (rare, but happens in some updates), 
+			-- we use AssemblyLinearVelocity to lead the shot.
+			local velocity = target.AssemblyLinearVelocity or Vector3.new(0,0,0)
 			local travelTime = (target.Position - handle.Position).Magnitude / HARPOON_SPEED
-			local predictedPos = target.Position + (target.AssemblyLinearVelocity * travelTime)
+			local predictedPos = target.Position + (velocity * travelTime)
 			
+			-- Snap gun to target
 			handle.CFrame = CFrame.lookAt(handle.Position, predictedPos)
 		end
 	end
 end)
 
-handle.Touched:Connect(function(hit)
-	local enemy = hit.Parent
-	if enemy:FindFirstChild("Humanoid") and enemy ~= player.Character then
-		print("Target Secured! Teleporting to Base...")
-		
-		local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-		if hrp then
-			hrp.CFrame = CFrame.new(BASE_LOCATION)
-		end
-	end
-end)
-
-local function onButtonPress(actionName, inputState)
+-- [[ MOBILE & PC TOGGLE ]] --
+local function toggleLock(actionName, inputState)
 	if inputState == Enum.UserInputState.Begin then
 		isLocked = not isLocked
-		print(isLocked and "Aura Locked" or "Aura Lost")
+		print(isLocked and "Aura Locked 🎯" or "Lock Off")
 	end
+	return Enum.ContextActionResult.Success
 end
 
 tool.Equipped:Connect(function()
-	CAS:BindAction("LockOn", onButtonPress, true, Enum.KeyCode.F)
-	CAS:SetTitle("LockOn", "LOCK 🎯") 
+	CAS:BindAction("HarpoonAutoAim", toggleLock, true, LOCK_KEY)
+	CAS:SetTitle("HarpoonAutoAim", "🎯 LOCK") -- Mobile button
 end)
 
 tool.Unequipped:Connect(function()
-	CAS:UnbindAction("LockOn")
+	CAS:UnbindAction("HarpoonAutoAim")
 	isLocked = false
 end)
    end,
