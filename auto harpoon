@@ -48,83 +48,80 @@ local CAS = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 
 -- [[ CONFIG ]] --
-local RANGE = 250 -- Large range to grab distant Celestials
-local HARPOON_SPEED = 180 -- Fast travel speed for the gamepass gun
+local RANGE = 300 -- Huge range to grab Celestials from afar
+local HARPOON_SPEED = 200
 local LOCK_KEY = Enum.KeyCode.F
 
 local tool = script.Parent
 local handle = tool:WaitForChild("Handle")
+local player = Players.LocalPlayer
 local isLocked = false
 
--- [[ BRAINROT FILTER ]] --
--- In "Escape Tsunami," Brainrots are usually models with a "HumanoidRootPart" 
--- or a specific name/tag. This script looks for any character model that isn't a player.
-local function isValidBrainrot(obj)
-	if not obj:IsA("Model") then return false end
-	local hrp = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("PrimaryPart")
-	
-	-- Ensure it's not a player and has a part to aim at
-	if hrp and not Players:GetPlayerFromCharacter(obj) then
-		return true
-	end
-	return false
+-- [[ NEW: ENHANCED BRAINROT DETECTOR ]] --
+local function isTargetable(obj)
+    -- Ignore players and the wave
+    if Players:GetPlayerFromCharacter(obj.Parent) or obj.Name == "Tsunami" then return false end
+    
+    -- In Escape Tsunami, collectables are usually Models or Parts with "Brainrot" in the name
+    -- Or they have a ProximityPrompt to pick them up
+    if obj:IsA("Model") or obj:IsA("BasePart") then
+        if obj:FindFirstChildOfClass("ProximityPrompt") or string.find(string.lower(obj.Name), "rot") then
+            return true
+        end
+    end
+    return false
 end
 
--- [[ FIND THE JUICIEST BRAINROT ]] --
-local function getBestTarget()
-	local closest, shortestDist = nil, RANGE
-	
-	-- We check the workspace for spawnable Brainrots
-	for _, obj in pairs(workspace:GetChildren()) do
-		if isValidBrainrot(obj) then
-			local hrp = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("PrimaryPart")
-			local dist = (hrp.Position - handle.Position).Magnitude
-			
-			if dist < shortestDist then
-				shortestDist = dist
-				closest = hrp
-			end
-		end
-	end
-	return closest
+-- [[ SCAN THE CORRIDOR ]] --
+local function findTheBrainrot()
+    local closest, shortestDist = nil, RANGE
+    
+    -- We scan Workspace and also common folders like "DroppedItems" or "Spawns"
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if isTargetable(obj) then
+            local pos = obj:IsA("Model") and (obj.PrimaryPart and obj.PrimaryPart.Position or obj:GetModelCFrame().Position) or obj.Position
+            local dist = (pos - handle.Position).Magnitude
+            
+            if dist < shortestDist then
+                shortestDist = dist
+                closest = obj
+            end
+        end
+    end
+    return closest
 end
 
--- [[ THE AUTO-AIM LOOP ]] --
+-- [[ THE AIMBOT ]] --
 RunService.RenderStepped:Connect(function()
-	if isLocked and handle then
-		local target = getBestTarget()
-		
-		if target then
-			-- The "Escape Tsunami" harpoon has a slight travel time.
-			-- If the Brainrot is moving (rare, but happens in some updates), 
-			-- we use AssemblyLinearVelocity to lead the shot.
-			local velocity = target.AssemblyLinearVelocity or Vector3.new(0,0,0)
-			local travelTime = (target.Position - handle.Position).Magnitude / HARPOON_SPEED
-			local predictedPos = target.Position + (velocity * travelTime)
-			
-			-- Snap gun to target
-			handle.CFrame = CFrame.lookAt(handle.Position, predictedPos)
-		end
-	end
+    if isLocked and handle then
+        local target = findTheBrainrot()
+        
+        if target then
+            local targetPos = target:IsA("Model") and (target.PrimaryPart and target.PrimaryPart.Position or target:GetModelCFrame().Position) or target.Position
+            
+            -- Snap the harpoon directly to the target's center
+            handle.CFrame = CFrame.lookAt(handle.Position, targetPos)
+        end
+    end
 end)
 
--- [[ MOBILE & PC TOGGLE ]] --
-local function toggleLock(actionName, inputState)
-	if inputState == Enum.UserInputState.Begin then
-		isLocked = not isLocked
-		print(isLocked and "Aura Locked 🎯" or "Lock Off")
-	end
-	return Enum.ContextActionResult.Success
+-- [[ CONTROLS ]] --
+local function onAction(actionName, inputState)
+    if inputState == Enum.UserInputState.Begin then
+        isLocked = not isLocked
+        print(isLocked and "LOCKING IN..." or "UNLOCK")
+    end
+    return Enum.ContextActionResult.Success
 end
 
 tool.Equipped:Connect(function()
-	CAS:BindAction("HarpoonAutoAim", toggleLock, true, LOCK_KEY)
-	CAS:SetTitle("HarpoonAutoAim", "🎯 LOCK") -- Mobile button
+    CAS:BindAction("HarpoonLock", onAction, true, LOCK_KEY)
+    CAS:SetTitle("HarpoonLock", "🎯 LOCK")
 end)
 
 tool.Unequipped:Connect(function()
-	CAS:UnbindAction("HarpoonAutoAim")
-	isLocked = false
+    CAS:UnbindAction("HarpoonLock")
+    isLocked = false
 end)
    end,
 })
